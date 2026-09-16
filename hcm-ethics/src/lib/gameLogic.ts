@@ -113,12 +113,44 @@ export function getLineScore(board: Board, move: Move, mark: Mark): number {
   return best;
 }
 
+export function getNearbyAvailableMoves(board: Board, radius = 2): Move[] {
+  const moves: Move[] = [];
+  const visited = new Set<string>();
+
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (board[r][c] !== null) {
+        for (let dr = -radius; dr <= radius; dr++) {
+          for (let dc = -radius; dc <= radius; dc++) {
+            const nr = r + dr;
+            const nc = c + dc;
+            const key = `${nr},${nc}`;
+            if (isInside(nr, nc) && board[nr][nc] === null && !visited.has(key)) {
+              visited.add(key);
+              moves.push({ row: nr, col: nc });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return moves;
+}
+
 export function hasNearWinThreat(board: Board, mark: Mark): boolean {
-  return getAvailableMoves(board).some((move) => {
-    const next = cloneBoard(board);
-    next[move.row][move.col] = mark;
-    return checkWinner(next).winner === mark || getLineScore(next, move, mark) >= 43;
-  });
+  const candidates = getNearbyAvailableMoves(board, 1);
+  if (candidates.length === 0) {
+    return false;
+  }
+
+  for (const move of candidates) {
+    if (getLineScore(board, move, mark) >= 43) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function suggestPlayerMove(board: Board): Move | null {

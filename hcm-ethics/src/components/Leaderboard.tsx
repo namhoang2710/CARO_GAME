@@ -115,6 +115,7 @@ export default function Leaderboard({
 
   useEffect(() => {
     let active = true;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     async function loadRows() {
       const result = await fetchLeaderboard(limit);
@@ -127,15 +128,27 @@ export default function Leaderboard({
       setLoading(false);
     }
 
+    function debouncedLoadRows() {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      debounceTimer = setTimeout(() => {
+        void loadRows();
+      }, 600);
+    }
+
     void loadRows();
     const unsubscribe = subscribeLeaderboard(() => {
-      void loadRows();
+      debouncedLoadRows();
     });
-    window.addEventListener(LEADERBOARD_REFRESH_EVENT, loadRows);
+    window.addEventListener(LEADERBOARD_REFRESH_EVENT, debouncedLoadRows);
 
     return () => {
       active = false;
-      window.removeEventListener(LEADERBOARD_REFRESH_EVENT, loadRows);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      window.removeEventListener(LEADERBOARD_REFRESH_EVENT, debouncedLoadRows);
       unsubscribe?.();
     };
   }, [limit]);

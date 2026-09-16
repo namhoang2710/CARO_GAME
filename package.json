@@ -6,7 +6,7 @@
     "hcm-ethics"
   ],
   "engines": {
-    "node": "20.x"
+    "node": ">=20.x"
   },
   "scripts": {
     "dev": "npm --workspace hcm-ethics run dev",

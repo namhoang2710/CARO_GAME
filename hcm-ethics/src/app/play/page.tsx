@@ -60,7 +60,7 @@ type ScoreCard = {
 const BOT_THINK_DELAY_MS = 250;
 const CARD_REVEAL_MS = 650;
 const FREEZE_DURATION_MS = 8000;
-const SCORE_SYNC_DELAY_MS = 30;
+const SCORE_SYNC_DELAY_MS = 800;
 
 function resultFromWinner(winner: "X" | "O" | null): GameResult {
   if (winner === "X") {

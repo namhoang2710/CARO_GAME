@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useMemo } from "react";
 import { Board, Move, WinnerState } from "@/lib/gameLogic";
 
 type GameBoardProps = {
@@ -13,9 +14,60 @@ type GameBoardProps = {
   onCellClick: (row: number, col: number) => void;
 };
 
-function sameMove(a: Move | null | undefined, row: number, col: number): boolean {
-  return Boolean(a && a.row === row && a.col === col);
-}
+type CellProps = {
+  cell: "X" | "O" | null;
+  rowIndex: number;
+  colIndex: number;
+  disabled: boolean;
+  isHint: boolean;
+  isWinner: boolean;
+  canRemove: boolean;
+  onCellClick: (row: number, col: number) => void;
+};
+
+const BoardCell = React.memo(
+  function BoardCell({
+    cell,
+    rowIndex,
+    colIndex,
+    disabled,
+    isHint,
+    isWinner,
+    canRemove,
+    onCellClick,
+  }: CellProps) {
+    return (
+      <button
+        aria-label={`Ô ${rowIndex + 1}-${colIndex + 1}`}
+        className={[
+          "board-cell aspect-square min-w-0 rounded-[0.25rem] border text-[clamp(0.65rem,4.5vw,1.75rem)] font-black leading-none select-none sm:rounded-md",
+          "focus:outline-none focus:ring-1 focus:ring-cyan-300",
+          cell === "X" ? "border-cyan-300/70 bg-cyan-400/20 text-cyan-200" : "",
+          cell === "O" ? "border-fuchsia-300/70 bg-fuchsia-400/20 text-fuchsia-200" : "",
+          !cell && !disabled
+            ? "border-white/10 bg-white/[0.05] text-white active:bg-cyan-300/20"
+            : "border-white/10 bg-white/[0.03]",
+          isHint ? "border-emerald-300 bg-emerald-300/30 ring-2 ring-emerald-300/80" : "",
+          canRemove ? "border-amber-300 bg-amber-300/25 ring-2 ring-amber-300/80" : "",
+          isWinner ? "border-yellow-200 bg-yellow-300/40 text-yellow-100 ring-2 ring-yellow-200" : "",
+        ].join(" ")}
+        disabled={disabled || (!canRemove && Boolean(cell))}
+        onClick={() => onCellClick(rowIndex, colIndex)}
+        type="button"
+      >
+        {cell ?? ""}
+      </button>
+    );
+  },
+  (prev, next) =>
+    prev.cell === next.cell &&
+    prev.disabled === next.disabled &&
+    prev.isHint === next.isHint &&
+    prev.isWinner === next.isWinner &&
+    prev.canRemove === next.canRemove &&
+    prev.rowIndex === next.rowIndex &&
+    prev.colIndex === next.colIndex,
+);
 
 export default function GameBoard({
   board,
@@ -27,50 +79,45 @@ export default function GameBoard({
   winnerState,
   onCellClick,
 }: GameBoardProps) {
+  // Tạo Set O(1) để kiểm tra ô chiến thắng, tránh lặp O(N) 225 lần
+  const winnerSet = useMemo(() => {
+    if (!winnerState?.line || winnerState.line.length === 0) {
+      return null;
+    }
+    return new Set(winnerState.line.map((m) => `${m.row}-${m.col}`));
+  }, [winnerState]);
+
   return (
     <div className="board-wrap relative mx-auto w-full max-w-[min(100%,calc(100svw-0.75rem),760px)]">
       <div
-        className="game-board grid w-full gap-px rounded-[1rem] border border-white/15 bg-slate-950/70 p-1 shadow-2xl shadow-fuchsia-900/20 backdrop-blur sm:gap-0.5 sm:rounded-[1.5rem] sm:p-2"
+        className="game-board grid w-full gap-px rounded-[0.75rem] border border-white/15 bg-slate-950/80 p-1 shadow-xl shadow-fuchsia-950/30 sm:gap-0.5 sm:rounded-[1.25rem] sm:p-2"
         style={{ gridTemplateColumns: `repeat(${board.length}, minmax(0, 1fr))` }}
       >
         {board.map((row, rowIndex) =>
           row.map((cell, colIndex) => {
-            const isHint = sameMove(hintMove, rowIndex, colIndex);
-            const isWinner = winnerState?.line.some((move) => sameMove(move, rowIndex, colIndex));
+            const key = `${rowIndex}-${colIndex}`;
+            const isHint = Boolean(hintMove && hintMove.row === rowIndex && hintMove.col === colIndex);
+            const isWinner = Boolean(winnerSet?.has(key));
             const canRemove = removeMode && cell === "O";
 
             return (
-              <button
-                aria-label={`Ô ${rowIndex + 1}-${colIndex + 1}`}
-                className={[
-                  "board-cell aspect-square min-w-0 rounded-[0.28rem] border text-[clamp(0.62rem,4.5vw,1.7rem)] font-black leading-none transition duration-200 sm:rounded-md sm:text-[clamp(0.78rem,3.2vw,1.7rem)]",
-                  "focus:outline-none focus:ring-2 focus:ring-cyan-300",
-                  cell === "X"
-                    ? "border-cyan-300/60 bg-cyan-400/15 text-cyan-200 shadow-lg shadow-cyan-500/20"
-                    : "",
-                  cell === "O"
-                    ? "border-fuchsia-300/60 bg-fuchsia-400/15 text-fuchsia-200 shadow-lg shadow-fuchsia-500/20"
-                    : "",
-                  !cell && !disabled
-                    ? "border-white/10 bg-white/[0.06] text-white hover:scale-[1.04] hover:border-cyan-300/70 hover:bg-cyan-300/15"
-                    : "border-white/10 bg-white/[0.04]",
-                  isHint ? "animate-pulse border-emerald-300 bg-emerald-300/25 ring-2 ring-emerald-300/70" : "",
-                  canRemove ? "border-amber-300 bg-amber-300/20 ring-2 ring-amber-300/70" : "",
-                  isWinner ? "border-yellow-200 bg-yellow-300/30 text-yellow-100 ring-2 ring-yellow-200" : "",
-                ].join(" ")}
-                disabled={disabled || (!canRemove && Boolean(cell))}
-                key={`${rowIndex}-${colIndex}`}
-                onClick={() => onCellClick(rowIndex, colIndex)}
-                type="button"
-              >
-                {cell ?? ""}
-              </button>
+              <BoardCell
+                canRemove={canRemove}
+                cell={cell}
+                colIndex={colIndex}
+                disabled={disabled}
+                isHint={isHint}
+                isWinner={isWinner}
+                key={key}
+                onCellClick={onCellClick}
+                rowIndex={rowIndex}
+              />
             );
           }),
         )}
       </div>
       {frozen ? (
-        <div className="frost-overlay absolute inset-0 flex items-center justify-center rounded-[1.5rem] border border-cyan-200/40 bg-slate-950/55 text-center text-xl font-black text-cyan-100 shadow-inner backdrop-blur-sm">
+        <div className="frost-overlay absolute inset-0 flex items-center justify-center rounded-[1.25rem] border border-cyan-200/40 bg-slate-950/70 text-center text-lg font-black text-cyan-100 backdrop-blur-sm sm:text-xl">
           {freezeLabel}
         </div>
       ) : null}
