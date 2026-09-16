@@ -6,6 +6,11 @@
 let audioCtx: AudioContext | null = null;
 let soundEnabled = true;
 
+export function disposeAudio() {
+  if (audioCtx && audioCtx.state !== "closed") void audioCtx.close().catch(() => {});
+  audioCtx = null;
+}
+
 function getAudioContext(): AudioContext | null {
   if (typeof window === "undefined") {
     return null;
@@ -177,4 +182,3 @@ export function playLoseSound() {
     osc.stop(ctx.currentTime + idx * 0.12 + 0.3);
   });
 }
-

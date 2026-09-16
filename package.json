@@ -12,7 +12,8 @@
     "dev": "npm --workspace hcm-ethics run dev",
     "build": "npm --workspace hcm-ethics run build",
     "start": "npm --workspace hcm-ethics run start",
-    "lint": "npm --workspace hcm-ethics run lint"
+    "lint": "npm --workspace hcm-ethics run lint",
+    "test": "npm --workspace hcm-ethics run test"
   },
   "dependencies": {
     "next": "16.2.6",
