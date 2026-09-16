@@ -189,19 +189,13 @@ export default function Leaderboard({
       .slice(0, limit);
   }, [currentPlayer, limit, rows]);
 
-  if (status) {
-    return (
-      <div className="rounded-[1.5rem] border border-amber-300/30 bg-amber-300/10 p-6 text-center text-amber-100">
-        <p className="text-lg font-black">{status}</p>
-        <p className="mt-2 text-sm text-amber-50/80">
-          Game vẫn chơi được bình thường. Leaderboard sẽ hoạt động sau khi cấu hình Supabase.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.06] shadow-2xl shadow-fuchsia-900/20 backdrop-blur sm:rounded-[1.5rem]">
+      {status ? (
+        <div className="border-b border-amber-300/20 bg-amber-400/10 px-4 py-2 text-center text-xs font-medium text-amber-200">
+          ⚠️ Đang lưu điểm dự phòng (kết nối Supabase: {status}). Khi mạng ổn định sẽ tự cập nhật.
+        </div>
+      ) : null}
       <div className="flex flex-col items-stretch justify-between gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:px-5">
         <div>
           <h2 className={compact ? "text-xl font-black text-white" : "text-2xl font-black text-white"}>

@@ -152,58 +152,142 @@ export async function fetchLeaderboard(limit = 10): Promise<{
     return { rows: sorted, error: null };
   }
 
-  const { data, error } = await supabase.rpc("get_leaderboard", { p_limit: limit });
+  try {
+    const { data, error } = await supabase.rpc("get_leaderboard", { p_limit: limit });
 
-  if (error) {
-    return { rows: [], error: error.message };
+    if (error) {
+      const local = readLocalScores();
+      const sorted = [...local]
+        .sort((a, b) => {
+          if (b.score !== a.score) {
+            return b.score - a.score;
+          }
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        })
+        .slice(0, Math.max(1, Math.min(limit, 50)));
+      return { rows: sorted, error: error.message };
+    }
+
+    return { rows: (data ?? []) as ScoreRow[], error: null };
+  } catch (err) {
+    const local = readLocalScores();
+    const sorted = [...local]
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      })
+      .slice(0, Math.max(1, Math.min(limit, 50)));
+    return { rows: sorted, error: (err as Error)?.message ?? "Lỗi kết nối Supabase" };
+  }
+}
+
+function submitLocalScoreFallback(payload: ScoreInsert): { error: string | null } {
+  const rows = readLocalScores();
+  const cleanName = payload.player_name.trim();
+  if (!cleanName) {
+    return { error: "Tên không được để trống" };
   }
 
-  return { rows: (data ?? []) as ScoreRow[], error: null };
+  const existingIndex = rows.findIndex(
+    (r) => r.player_name.trim().toLowerCase() === cleanName.toLowerCase(),
+  );
+
+  const updatedRow: ScoreRow = {
+    id: existingIndex >= 0 ? rows[existingIndex].id : `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    player_name: cleanName,
+    score: Math.max(0, payload.score),
+    result: payload.result,
+    correct_answers: payload.correct_answers,
+    wrong_answers: payload.wrong_answers,
+    total_moves: payload.total_moves,
+    created_at: new Date().toISOString(),
+  };
+
+  if (existingIndex >= 0) {
+    rows[existingIndex] = updatedRow;
+  } else {
+    rows.push(updatedRow);
+  }
+
+  writeLocalScores(rows);
+  notifyLocalChange();
+  return { error: null };
 }
 
 export async function submitScore(payload: ScoreInsert): Promise<{ error: string | null }> {
+  // Luôn backup lưu local để không bao giờ mất điểm
+  submitLocalScoreFallback(payload);
+
   if (!supabase) {
-    const rows = readLocalScores();
-    const cleanName = payload.player_name.trim();
-    if (!cleanName) {
-      return { error: "Tên không được để trống" };
-    }
-
-    const existingIndex = rows.findIndex(
-      (r) => r.player_name.trim().toLowerCase() === cleanName.toLowerCase(),
-    );
-
-    const updatedRow: ScoreRow = {
-      id: existingIndex >= 0 ? rows[existingIndex].id : `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      player_name: cleanName,
-      score: Math.max(0, payload.score),
-      result: payload.result,
-      correct_answers: payload.correct_answers,
-      wrong_answers: payload.wrong_answers,
-      total_moves: payload.total_moves,
-      created_at: new Date().toISOString(),
-    };
-
-    if (existingIndex >= 0) {
-      rows[existingIndex] = updatedRow;
-    } else {
-      rows.push(updatedRow);
-    }
-
-    writeLocalScores(rows);
-    notifyLocalChange();
     return { error: null };
   }
 
-  const { error } = await supabase.rpc("upsert_player_score", {
-    p_player_name: payload.player_name,
-    p_score: payload.score,
-    p_result: payload.result,
-    p_correct_answers: payload.correct_answers,
-    p_wrong_answers: payload.wrong_answers,
-    p_total_moves: payload.total_moves,
-  });
-  return { error: error?.message ?? null };
+  try {
+    const { error } = await supabase.rpc("upsert_player_score", {
+      p_player_name: payload.player_name,
+      p_score: payload.score,
+      p_result: payload.result,
+      p_correct_answers: payload.correct_answers,
+      p_wrong_answers: payload.wrong_answers,
+      p_total_moves: payload.total_moves,
+    });
+    return { error: error?.message ?? null };
+  } catch (err) {
+    return { error: (err as Error)?.message ?? null };
+  }
+}
+
+function applyLocalTargetEffect(payload: {
+  targetScoreId: string;
+  playerScore: number;
+  effect: TargetCardEffect;
+  percent?: number;
+}): { result: TargetCardEffectResult | null; error: string | null } {
+  const rows = readLocalScores();
+  const targetIndex = rows.findIndex((r) => r.id === payload.targetScoreId);
+
+  if (targetIndex < 0) {
+    return { result: null, error: "Không tìm thấy người chơi được chọn" };
+  }
+
+  const targetRow = rows[targetIndex];
+  const safePercent = Math.max(0, Math.min(payload.percent ?? 25, 100));
+  const currentTargetScore = targetRow.score;
+  let nextPlayerScore = payload.playerScore;
+  let nextTargetScore = currentTargetScore;
+  let effectDelta = 0;
+  let message = "";
+
+  if (payload.effect === "steal") {
+    effectDelta = Math.min(currentTargetScore, Math.ceil((currentTargetScore * safePercent) / 100));
+    nextTargetScore = Math.max(0, currentTargetScore - effectDelta);
+    nextPlayerScore = payload.playerScore + effectDelta;
+    message = `Cướp ${effectDelta} điểm (${safePercent}%) từ ${targetRow.player_name}.`;
+  } else if (payload.effect === "split") {
+    nextPlayerScore = Math.ceil((payload.playerScore + currentTargetScore) / 2);
+    nextTargetScore = Math.floor((payload.playerScore + currentTargetScore) / 2);
+    effectDelta = nextPlayerScore - payload.playerScore;
+    message = `Chia đều điểm với ${targetRow.player_name}. Bạn ${effectDelta >= 0 ? "+" : ""}${effectDelta} điểm.`;
+  }
+
+  rows[targetIndex] = {
+    ...targetRow,
+    score: nextTargetScore,
+  };
+  writeLocalScores(rows);
+  notifyLocalChange();
+
+  return {
+    result: {
+      player_score: Math.max(0, nextPlayerScore),
+      target_score: Math.max(0, nextTargetScore),
+      delta: effectDelta,
+      message,
+    },
+    error: null,
+  };
 }
 
 export async function applyTargetCardEffect(payload: {
@@ -213,71 +297,27 @@ export async function applyTargetCardEffect(payload: {
   percent?: number;
 }): Promise<{ result: TargetCardEffectResult | null; error: string | null }> {
   if (!supabase) {
-    const rows = readLocalScores();
-    const targetIndex = rows.findIndex((r) => r.id === payload.targetScoreId);
-
-    if (targetIndex < 0) {
-      return { result: null, error: "Không tìm thấy người chơi được chọn" };
-    }
-
-    const targetRow = rows[targetIndex];
-    const safePercent = Math.max(0, Math.min(payload.percent ?? 25, 100));
-    const currentTargetScore = targetRow.score;
-    let nextPlayerScore = payload.playerScore;
-    let nextTargetScore = currentTargetScore;
-    let effectDelta = 0;
-    let message = "";
-
-    if (payload.effect === "steal") {
-      effectDelta = Math.min(currentTargetScore, Math.ceil((currentTargetScore * safePercent) / 100));
-      nextTargetScore = Math.max(0, currentTargetScore - effectDelta);
-      nextPlayerScore = payload.playerScore + effectDelta;
-      message = `Cướp ${effectDelta} điểm (${safePercent}%) từ ${targetRow.player_name}.`;
-    } else if (payload.effect === "split") {
-      nextPlayerScore = Math.ceil((payload.playerScore + currentTargetScore) / 2);
-      nextTargetScore = Math.floor((payload.playerScore + currentTargetScore) / 2);
-      effectDelta = nextPlayerScore - payload.playerScore;
-      message = `Chia đều điểm với ${targetRow.player_name}. Bạn ${effectDelta >= 0 ? "+" : ""}${effectDelta} điểm.`;
-    }
-
-    rows[targetIndex] = {
-      ...targetRow,
-      score: nextTargetScore,
-    };
-    writeLocalScores(rows);
-    notifyLocalChange();
-
-    return {
-      result: {
-        player_score: Math.max(0, nextPlayerScore),
-        target_score: Math.max(0, nextTargetScore),
-        delta: effectDelta,
-        message,
-      },
-      error: null,
-    };
+    return applyLocalTargetEffect(payload);
   }
 
-  const { data, error } = await supabase.rpc("apply_score_card_target_effect", {
-    p_target_score_id: payload.targetScoreId,
-    p_player_score: Math.max(0, Math.floor(payload.playerScore)),
-    p_effect: payload.effect,
-    p_percent: payload.percent ?? null,
-  });
+  try {
+    const { data, error } = await supabase.rpc("apply_score_card_target_effect", {
+      p_target_score_id: payload.targetScoreId,
+      p_player_score: Math.max(0, Math.floor(payload.playerScore)),
+      p_effect: payload.effect,
+      p_percent: payload.percent ?? null,
+    });
 
-  if (error) {
-    if (error.message.includes("apply_score_card_target_effect") && error.message.includes("schema cache")) {
-      return {
-        result: null,
-        error: "Supabase chưa cập nhật RPC thẻ bài. Hãy chạy supabase/00-full-setup.sql trong SQL Editor rồi thử lại.",
-      };
+    if (error) {
+      // Fallback về local nếu RPC lỗi hoặc mạng rớt
+      return applyLocalTargetEffect(payload);
     }
 
-    return { result: null, error: error.message };
+    const firstRow = Array.isArray(data) ? data[0] : data;
+    return { result: (firstRow ?? null) as TargetCardEffectResult | null, error: null };
+  } catch {
+    return applyLocalTargetEffect(payload);
   }
-
-  const firstRow = Array.isArray(data) ? data[0] : data;
-  return { result: (firstRow ?? null) as TargetCardEffectResult | null, error: null };
 }
 
 export async function clearLeaderboard(password: string): Promise<{ error: string | null }> {
