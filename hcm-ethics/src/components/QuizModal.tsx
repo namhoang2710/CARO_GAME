@@ -23,7 +23,7 @@ export default function QuizModal({ question, onResolve }: QuizModalProps) {
   const isCorrect = selectedIndex === question.correctAnswerIndex;
 
   return (
-    <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-2 backdrop-blur-md sm:p-4">
+    <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-2 sm:p-4">
       <div className="quiz-modal modal-pop max-h-[calc(100svh-1rem)] w-full max-w-lg overflow-y-auto rounded-[1.25rem] border border-cyan-300/30 bg-slate-950 text-white shadow-2xl shadow-cyan-500/20 sm:rounded-[1.5rem]">
         <div className="border-b border-white/10 bg-gradient-to-r from-cyan-500/20 via-fuchsia-500/20 to-yellow-400/20 p-4 sm:p-5">
           <div className="mb-2 flex items-center justify-between gap-3">

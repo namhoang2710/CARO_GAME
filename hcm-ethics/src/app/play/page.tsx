@@ -930,7 +930,7 @@ export default function PlayPage() {
       </div>
 
       {cardChoices ? (
-        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-2 backdrop-blur-md sm:p-4">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-2 sm:p-4">
           <div className="modal-pop max-h-[calc(100svh-1rem)] w-full max-w-4xl overflow-y-auto rounded-[1.25rem] border border-white/10 bg-slate-950 p-3 text-white shadow-2xl shadow-fuchsia-900/30 sm:rounded-[1.75rem] sm:p-5">
             <div className="mb-5 text-center">
               <p className="text-sm font-black uppercase tracking-[0.24em] text-cyan-200">Chọn phần thưởng</p>
