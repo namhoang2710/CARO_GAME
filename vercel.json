@@ -2,6 +2,5 @@
   "framework": "nextjs",
   "installCommand": "npm install",
   "buildCommand": "npm --workspace hcm-ethics run build",
-  "devCommand": "npm --workspace hcm-ethics run dev",
-  "outputDirectory": "hcm-ethics/.next"
+  "devCommand": "npm --workspace hcm-ethics run dev"
 }
