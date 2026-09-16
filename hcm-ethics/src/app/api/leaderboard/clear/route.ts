@@ -19,10 +19,13 @@ function normalizeSupabaseUrl(url: string | undefined): string | null {
     : trimmedUrl;
 }
 
+const DEFAULT_SUPABASE_URL = "https://mrtbxibqtbtjxyxluzmz.supabase.co";
+const DEFAULT_SUPABASE_KEY = "sb_publishable_4zzKZ4YnOAruY3n6eoELAQ_6IV8MqW_";
+
 export async function POST(request: Request) {
-  const expectedPassword = process.env.LEADERBOARD_CLEAR_PASSWORD?.trim();
-  const supabaseUrl = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const expectedPassword = process.env.LEADERBOARD_CLEAR_PASSWORD?.trim() || "admin123";
+  const supabaseUrl = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) || DEFAULT_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || DEFAULT_SUPABASE_KEY;
 
   if (!expectedPassword) {
     return jsonResponse({ error: "Chưa cấu hình pass xóa BXH trên server." }, 500);

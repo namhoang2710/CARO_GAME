@@ -4,9 +4,12 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const DEFAULT_SUPABASE_URL = "https://mrtbxibqtbtjxyxluzmz.supabase.co";
+const DEFAULT_SUPABASE_KEY = "sb_publishable_4zzKZ4YnOAruY3n6eoELAQ_6IV8MqW_";
+
 function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || DEFAULT_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || DEFAULT_SUPABASE_KEY;
 
   if (!url || !key) {
     return null;

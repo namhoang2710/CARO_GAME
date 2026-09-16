@@ -14,8 +14,11 @@ function normalizeSupabaseUrl(url: string | undefined): string | null {
     : trimmedUrl;
 }
 
-const supabaseUrl = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+const DEFAULT_SUPABASE_URL = "https://mrtbxibqtbtjxyxluzmz.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_4zzKZ4YnOAruY3n6eoELAQ_6IV8MqW_";
+
+const supabaseUrl = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) || DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || DEFAULT_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export const isLocalMode = !isSupabaseConfigured;
