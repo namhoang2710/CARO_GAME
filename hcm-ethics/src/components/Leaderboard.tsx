@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import LeaderboardClearButton from "@/components/LeaderboardClearButton";
 import { LEADERBOARD_REFRESH_EVENT } from "@/lib/leaderboardEvents";
-import { fetchLeaderboard, type ScoreRow, subscribeLeaderboard } from "@/lib/supabaseClient";
+import { fetchLeaderboard, isLocalMode, type ScoreRow, subscribeLeaderboard } from "@/lib/supabaseClient";
 import { getResultLabel } from "@/lib/scoring";
 
 type LeaderboardProps = {
@@ -215,7 +215,7 @@ export default function Leaderboard({
             />
           ) : null}
           <span className="rounded-full bg-emerald-300/15 px-3 py-1 text-xs font-bold text-emerald-100">
-            {selectMode ? selectMode.label : "Realtime"}
+            {selectMode ? selectMode.label : isLocalMode ? "Local Realtime" : "Cloud Realtime"}
           </span>
         </div>
       </div>

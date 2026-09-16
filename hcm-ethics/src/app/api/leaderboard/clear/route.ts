@@ -28,15 +28,16 @@ export async function POST(request: Request) {
     return jsonResponse({ error: "Chưa cấu hình pass xóa BXH trên server." }, 500);
   }
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    return jsonResponse({ error: "Chưa cấu hình Supabase service role trên server." }, 500);
-  }
-
   const payload = await parsePayload(request);
   const password = typeof payload?.password === "string" ? payload.password.trim() : "";
 
   if (!password || !isPasswordMatch(password, expectedPassword)) {
     return jsonResponse({ error: "Pass xóa BXH không đúng." }, 403);
+  }
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    // Chưa cấu hình Supabase trên cloud: Cho phép xóa cục bộ ở client
+    return jsonResponse({ ok: true, localOnly: true }, 200);
   }
 
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {

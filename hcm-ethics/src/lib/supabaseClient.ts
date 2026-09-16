@@ -1,5 +1,6 @@
 import { createClient, RealtimeChannel } from "@supabase/supabase-js";
 import { GameResult } from "@/lib/gameLogic";
+import { LEADERBOARD_REFRESH_EVENT } from "@/lib/leaderboardEvents";
 
 function normalizeSupabaseUrl(url: string | undefined): string | null {
   if (!url) {
@@ -17,8 +18,9 @@ const supabaseUrl = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isLocalMode = !isSupabaseConfigured;
 
-export const supabase = supabaseUrl && supabaseAnonKey
+export const supabase = isSupabaseConfigured && supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
@@ -43,16 +45,114 @@ export type TargetCardEffectResult = {
   message: string;
 };
 
+// ==============================================================================
+// LOCAL STORAGE & BROADCASTCHANNEL ENGINE (Fallback khi chưa có Supabase Cloud)
+// ==============================================================================
+const LOCAL_STORAGE_KEY = "caro_quiz_leaderboard_data";
+const BROADCAST_CHANNEL_NAME = "caro_leaderboard_channel";
+
+const INITIAL_MOCK_ROWS: ScoreRow[] = [
+  {
+    id: "mock-1",
+    player_name: "Minh Anh",
+    score: 420,
+    result: "win",
+    correct_answers: 4,
+    wrong_answers: 0,
+    total_moves: 14,
+    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+  },
+  {
+    id: "mock-2",
+    player_name: "Tuấn Hưng",
+    score: 310,
+    result: "win",
+    correct_answers: 3,
+    wrong_answers: 1,
+    total_moves: 18,
+    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+  },
+  {
+    id: "mock-3",
+    player_name: "Phương Thảo",
+    score: 250,
+    result: "draw",
+    correct_answers: 2,
+    wrong_answers: 0,
+    total_moves: 22,
+    created_at: new Date(Date.now() - 3600000 * 6).toISOString(),
+  },
+];
+
+function getLocalBroadcastChannel(): BroadcastChannel | null {
+  if (typeof window === "undefined" || !("BroadcastChannel" in window)) {
+    return null;
+  }
+  try {
+    return new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+  } catch {
+    return null;
+  }
+}
+
+function notifyLocalChange() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent(LEADERBOARD_REFRESH_EVENT));
+  const channel = getLocalBroadcastChannel();
+  channel?.postMessage({ type: "refresh" });
+  channel?.close();
+}
+
+function readLocalScores(): ScoreRow[] {
+  if (typeof window === "undefined") {
+    return INITIAL_MOCK_ROWS;
+  }
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_MOCK_ROWS));
+      return INITIAL_MOCK_ROWS;
+    }
+    return JSON.parse(raw) as ScoreRow[];
+  } catch {
+    return INITIAL_MOCK_ROWS;
+  }
+}
+
+function writeLocalScores(rows: ScoreRow[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(rows));
+  } catch {
+    // Ignore quota errors
+  }
+}
+
+// ==============================================================================
+// PUBLIC API FUNCTIONS (Tự động chọn Cloud hoặc Local Fallback)
+// ==============================================================================
 export async function fetchLeaderboard(limit = 10): Promise<{
   rows: ScoreRow[];
   error: string | null;
 }> {
   if (!supabase) {
-    return { rows: [], error: "Chưa kết nối Supabase" };
+    const rows = readLocalScores();
+    const sorted = [...rows]
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      })
+      .slice(0, Math.max(1, Math.min(limit, 50)));
+    return { rows: sorted, error: null };
   }
 
-  const { data, error } = await supabase
-    .rpc("get_leaderboard", { p_limit: limit });
+  const { data, error } = await supabase.rpc("get_leaderboard", { p_limit: limit });
 
   if (error) {
     return { rows: [], error: error.message };
@@ -63,7 +163,36 @@ export async function fetchLeaderboard(limit = 10): Promise<{
 
 export async function submitScore(payload: ScoreInsert): Promise<{ error: string | null }> {
   if (!supabase) {
-    return { error: "Chưa kết nối Supabase" };
+    const rows = readLocalScores();
+    const cleanName = payload.player_name.trim();
+    if (!cleanName) {
+      return { error: "Tên không được để trống" };
+    }
+
+    const existingIndex = rows.findIndex(
+      (r) => r.player_name.trim().toLowerCase() === cleanName.toLowerCase(),
+    );
+
+    const updatedRow: ScoreRow = {
+      id: existingIndex >= 0 ? rows[existingIndex].id : `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      player_name: cleanName,
+      score: Math.max(0, payload.score),
+      result: payload.result,
+      correct_answers: payload.correct_answers,
+      wrong_answers: payload.wrong_answers,
+      total_moves: payload.total_moves,
+      created_at: new Date().toISOString(),
+    };
+
+    if (existingIndex >= 0) {
+      rows[existingIndex] = updatedRow;
+    } else {
+      rows.push(updatedRow);
+    }
+
+    writeLocalScores(rows);
+    notifyLocalChange();
+    return { error: null };
   }
 
   const { error } = await supabase.rpc("upsert_player_score", {
@@ -84,7 +213,49 @@ export async function applyTargetCardEffect(payload: {
   percent?: number;
 }): Promise<{ result: TargetCardEffectResult | null; error: string | null }> {
   if (!supabase) {
-    return { result: null, error: "Chưa kết nối Supabase" };
+    const rows = readLocalScores();
+    const targetIndex = rows.findIndex((r) => r.id === payload.targetScoreId);
+
+    if (targetIndex < 0) {
+      return { result: null, error: "Không tìm thấy người chơi được chọn" };
+    }
+
+    const targetRow = rows[targetIndex];
+    const safePercent = Math.max(0, Math.min(payload.percent ?? 25, 100));
+    const currentTargetScore = targetRow.score;
+    let nextPlayerScore = payload.playerScore;
+    let nextTargetScore = currentTargetScore;
+    let effectDelta = 0;
+    let message = "";
+
+    if (payload.effect === "steal") {
+      effectDelta = Math.min(currentTargetScore, Math.ceil((currentTargetScore * safePercent) / 100));
+      nextTargetScore = Math.max(0, currentTargetScore - effectDelta);
+      nextPlayerScore = payload.playerScore + effectDelta;
+      message = `Cướp ${effectDelta} điểm (${safePercent}%) từ ${targetRow.player_name}.`;
+    } else if (payload.effect === "split") {
+      nextPlayerScore = Math.ceil((payload.playerScore + currentTargetScore) / 2);
+      nextTargetScore = Math.floor((payload.playerScore + currentTargetScore) / 2);
+      effectDelta = nextPlayerScore - payload.playerScore;
+      message = `Chia đều điểm với ${targetRow.player_name}. Bạn ${effectDelta >= 0 ? "+" : ""}${effectDelta} điểm.`;
+    }
+
+    rows[targetIndex] = {
+      ...targetRow,
+      score: nextTargetScore,
+    };
+    writeLocalScores(rows);
+    notifyLocalChange();
+
+    return {
+      result: {
+        player_score: Math.max(0, nextPlayerScore),
+        target_score: Math.max(0, nextTargetScore),
+        delta: effectDelta,
+        message,
+      },
+      error: null,
+    };
   }
 
   const { data, error } = await supabase.rpc("apply_score_card_target_effect", {
@@ -98,7 +269,7 @@ export async function applyTargetCardEffect(payload: {
     if (error.message.includes("apply_score_card_target_effect") && error.message.includes("schema cache")) {
       return {
         result: null,
-        error: "Supabase chưa cập nhật RPC thẻ bài. Hãy chạy supabase/fix-card-percent-effects.sql trong SQL Editor rồi thử lại.",
+        error: "Supabase chưa cập nhật RPC thẻ bài. Hãy chạy supabase/00-full-setup.sql trong SQL Editor rồi thử lại.",
       };
     }
 
@@ -117,10 +288,16 @@ export async function clearLeaderboard(password: string): Promise<{ error: strin
     },
     method: "POST",
   });
-  const data = (await response.json().catch(() => ({}))) as { error?: string };
+  const data = (await response.json().catch(() => ({}))) as { error?: string; ok?: boolean; localOnly?: boolean };
 
   if (!response.ok) {
     return { error: data.error ?? "Không xóa được bảng xếp hạng" };
+  }
+
+  // Nếu server phản hồi ok, đồng thời xóa luôn local storage
+  if (typeof window !== "undefined") {
+    writeLocalScores([]);
+    notifyLocalChange();
   }
 
   return { error: null };
@@ -128,7 +305,30 @@ export async function clearLeaderboard(password: string): Promise<{ error: strin
 
 export function subscribeLeaderboard(onChange: () => void): (() => void) | null {
   if (!supabase) {
-    return null;
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const channel = getLocalBroadcastChannel();
+    const handleBroadcast = (event: MessageEvent) => {
+      if (event.data?.type === "refresh") {
+        onChange();
+      }
+    };
+    channel?.addEventListener("message", handleBroadcast);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === LOCAL_STORAGE_KEY) {
+        onChange();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      channel?.removeEventListener("message", handleBroadcast);
+      channel?.close();
+      window.removeEventListener("storage", handleStorage);
+    };
   }
 
   const channel: RealtimeChannel = supabase

@@ -22,6 +22,16 @@ import {
 import { LEADERBOARD_REFRESH_EVENT } from "@/lib/leaderboardEvents";
 import { getResultLabel } from "@/lib/scoring";
 import { applyTargetCardEffect, ScoreInsert, ScoreRow, submitScore, TargetCardEffect } from "@/lib/supabaseClient";
+import {
+  isSoundEnabled,
+  playCardSound,
+  playCorrectSound,
+  playLoseSound,
+  playMoveSound,
+  playWinSound,
+  playWrongSound,
+  toggleSound,
+} from "@/lib/soundEffects";
 
 type Turn = "player" | "bot" | "round-end";
 type CardTone = "emerald" | "cyan" | "fuchsia" | "amber" | "rose" | "slate";
@@ -223,6 +233,7 @@ export default function PlayPage() {
   const [playerName] = useState(() =>
     typeof window === "undefined" ? "Khách mời" : localStorage.getItem("caro-player-name") || "Khách mời",
   );
+  const [soundActive, setSoundActive] = useState(() => isSoundEnabled());
   const [board, setBoard] = useState<Board>(() => createEmptyBoard());
   const [turn, setTurn] = useState<Turn>("player");
   const [winnerState, setWinnerState] = useState<WinnerState>({ winner: null, line: [] });
@@ -458,6 +469,11 @@ export default function PlayPage() {
 
     const checked = checkWinner(nextBoard);
     const finalResult = checked.winner ? resultFromWinner(checked.winner) : "draw";
+    if (finalResult === "win") {
+      playWinSound();
+    } else if (finalResult === "lose") {
+      playLoseSound();
+    }
     const roundBonus = getRoundBonus(finalResult, moves);
     const finalScore = Math.max(0, scoreRef.current + roundBonus);
 
@@ -503,6 +519,7 @@ export default function PlayPage() {
 
       const nextBoard = cloneBoard(startBoard);
       nextBoard[botMove.row][botMove.col] = "O";
+      playMoveSound(true);
       const nextMoves = movesBeforeBot + 1;
       const checked = checkWinner(nextBoard);
 
@@ -545,6 +562,7 @@ export default function PlayPage() {
 
     const nextBoard = cloneBoard(board);
     nextBoard[row][col] = "X";
+    playMoveSound(false);
     const nextPlayerMoves = playerMoveCount + 1;
     const nextMoves = totalMoves + 1;
     const checked = checkWinner(nextBoard);
@@ -582,6 +600,7 @@ export default function PlayPage() {
     setCurrentQuestion(null);
 
     if (correct) {
+      playCorrectSound();
       updateScore((currentScore) => currentScore + 30, {
         correctAnswers: nextCorrect,
         wrongAnswers: nextWrong,
@@ -592,6 +611,7 @@ export default function PlayPage() {
       return;
     }
 
+    playWrongSound();
     updateScore((currentScore) => currentScore * 0.5, {
       correctAnswers: nextCorrect,
       wrongAnswers: nextWrong,
@@ -646,6 +666,7 @@ export default function PlayPage() {
       return;
     }
 
+    playCardSound();
     setRevealedCardId(card.id);
     setCardRevealBusy(true);
     setCardMessage(`Đã lật lá "${card.title}". Hiệu ứng sẽ áp dụng ngay.`);
@@ -789,6 +810,15 @@ export default function PlayPage() {
               <h2 className="truncate text-base font-black leading-tight text-white sm:mt-1 sm:text-2xl">{turnLabel}</h2>
             </div>
             <div className="flex shrink-0 gap-1.5 sm:gap-2">
+              <button
+                aria-label={soundActive ? "Tắt âm thanh" : "Bật âm thanh"}
+                className="min-h-8 rounded-lg border border-white/10 px-2 py-1.5 text-[0.68rem] font-bold text-white transition hover:border-cyan-300 hover:bg-cyan-300/10 sm:min-h-0 sm:rounded-2xl sm:px-3 sm:py-3 sm:text-sm"
+                onClick={() => setSoundActive(toggleSound())}
+                title={soundActive ? "Âm thanh: Đang bật" : "Âm thanh: Đang tắt"}
+                type="button"
+              >
+                {soundActive ? "🔊" : "🔇"}
+              </button>
               <button
                 className="min-h-8 rounded-lg border border-white/10 px-2.5 py-1.5 text-[0.68rem] font-bold text-white transition hover:border-cyan-300 hover:bg-cyan-300/10 sm:min-h-0 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
                 onClick={resetGame}
