@@ -1,4 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
+import { quizQuestions } from "../../src/data/questions";
+import { createHash } from "node:crypto";
+import { newGame } from "../../src/lib/server/gameEngine";
 
 async function join(page: Page, code: string, name: string) {
   await page.goto(`/?room=${code}`);
@@ -39,19 +42,43 @@ test("admin + two players: lobby gates, live game, quiz, final scores, new-sessi
   await expect(player.locator(".game-board")).toBeVisible({ timeout: 20000 });
   for (const [row, col] of [[8, 8], [1, 1], [15, 15]]) {
     await player.getByRole("button", { name: `Hàng ${row}, cột ${col}: trống`, exact: true }).click();
-    await expect(player.locator(".board-topline h1")).not.toHaveText("Bot đang nghĩ…", { timeout: 15000 });
+    await expect(player.locator(".board-topline h1")).not.toHaveText("Bot đang đi…", { timeout: 15000 });
   }
   await expect(player.locator("dialog[open]")).toBeVisible();
   await expect(player.locator(".answer-list button")).toHaveCount(4);
-  await player.locator(".answer-list button").first().click();
+  // Regression: Tailwind's reset removed the UA dialog margin, placing it at 0,0.
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await player.setViewportSize(viewport);
+    const box = await player.locator("dialog[open]").boundingBox();
+    expect(Math.abs(box!.x + box!.width / 2 - viewport.width / 2)).toBeLessThan(2);
+    expect(Math.abs(box!.y + box!.height / 2 - viewport.height / 2)).toBeLessThan(2);
+    expect(box!.height).toBeLessThanOrEqual(viewport.height - 23);
+  }
+  await player.setViewportSize({ width: 390, height: 844 });
+  const questionText = await player.locator("#quiz-title").textContent();
+  const question = quizQuestions.find((q) => q.question === questionText)!;
+  const correct = player.locator(".answer-list button").filter({ hasText: question.options[question.correctAnswerIndex] });
+  await player.route("**/api/rooms", async (route) => {
+    if (route.request().method() === "POST") await new Promise((resolve) => setTimeout(resolve, 700));
+    await route.continue();
+  });
+  await correct.click();
+  await expect(correct).toHaveAttribute("aria-pressed", "true");
+  await expect(player.getByText("Đã chọn đáp án · Đang kiểm tra…")).toBeVisible();
   await expect(player.locator(".quiz-feedback")).toBeVisible();
   await player.screenshot({ path: "test-results/quiz-mobile.png", fullPage: true });
   await player.getByRole("button", { name: "Tiếp tục →" }).click();
   await expect(player.locator(".quiz-feedback")).toHaveCount(0);
-  if (await player.locator(".mystery-card").first().isVisible()) {
-    await player.locator(".mystery-card").first().click();
-    await expect(player.locator("dialog[open]")).toHaveCount(0);
-  }
+  await player.locator(".mystery-card").first().click();
+  await expect(player.locator(".mystery-card").first()).toHaveAttribute("aria-pressed", "true");
+  await expect(player.locator(".card-reveal")).toBeVisible();
+  const revealedTitle = await player.locator("#quiz-title").textContent();
+  await player.reload();
+  await expect(player.locator(".card-reveal")).toBeVisible();
+  await expect(player.locator("#quiz-title")).toHaveText(revealedTitle!);
+  await player.screenshot({ path: "test-results/card-reveal-mobile.png", fullPage: true });
+  await player.getByRole("button", { name: /Đã hiểu ·/ }).click();
+  await expect(player.locator("dialog[open]")).toHaveCount(0);
   await player.screenshot({ path: "test-results/play-mobile.png", fullPage: true });
   expect(await player.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await player.reload();
@@ -62,6 +89,32 @@ test("admin + two players: lobby gates, live game, quiz, final scores, new-sessi
   await player2.setViewportSize({ width: 844, height: 390 });
   await player2.screenshot({ path: "test-results/play-landscape.png", fullPage: true });
   expect(await player2.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // Seed a completed game through the isolated test DB, then exercise the real
+  // API and UI after reload. This adapter never points to production Supabase.
+  const credential = await player2.evaluate(() => JSON.parse(sessionStorage.getItem("caro:session:v1")!));
+  const headers = { Authorization: `Bearer ${credential.token}` };
+  const current = await (await player2.request.get(`/api/rooms?code=${code}`, { headers })).json();
+  const finishedGame = newGame(); finishedGame.stage = "round"; finishedGame.result = "lose";
+  const saved = await host.request.post("http://127.0.0.1:54329/rest/v1/rpc/caro_commit", {
+    headers: { apikey: "test-service-key" }, data: {
+      p_code: code, p_token_hash: createHash("sha256").update(credential.token).digest("hex"),
+      p_version: current.me.version, p_action_id: crypto.randomUUID(), p_state: finishedGame,
+      p_stats: { score: 20, wins: 0, correct: 0, wrong: 0, moves: 12 }, p_target_id: null, p_effect: null, p_percent: 0,
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  await player2.reload();
+  await expect(player2.locator(".completed-notice")).toBeVisible();
+  await expect(player2.locator(".game-board button:not(:disabled)")).toHaveCount(0);
+  for (const type of ["next", "move"]) {
+    const replay = await player2.request.post("/api/rooms", { headers, data: {
+      action: "play", code, version: current.me.version + 1, actionId: crypto.randomUUID(), move: { type, row: 0, col: 0 },
+    } });
+    expect(replay.status()).toBe(400);
+    expect((await replay.json()).error).toContain("lượt chơi duy nhất");
+  }
+  await player2.reload();
+  await expect(player2.locator(".completed-notice")).toBeVisible();
   host.once("dialog", (dialog) => dialog.accept());
   await host.getByRole("button", { name: "Kết thúc & chốt điểm" }).click();
   await player.getByRole("button", { name: "Làm mới", exact: true }).click();

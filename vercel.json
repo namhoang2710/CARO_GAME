@@ -1,5 +1,6 @@
 {
   "framework": "nextjs",
+  "regions": ["hnd1"],
   "installCommand": "npm install",
   "buildCommand": "npm --workspace hcm-ethics run build",
   "devCommand": "npm --workspace hcm-ethics run dev"

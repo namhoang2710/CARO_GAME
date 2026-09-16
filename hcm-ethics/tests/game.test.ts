@@ -35,7 +35,7 @@ test("quiz every third player move hides answers and cards until resolved", () =
   assert.throws(() => advanceGame(chosen.game, chosen.stats, { type: "card", index: 0 }));
 });
 
-test("wrong answer halves score, freeze cannot be bypassed, next round keeps stats", () => {
+test("wrong answer halves score, freeze cannot be bypassed, completed game cannot restart", () => {
   const initial = newGame(); initial.roundMoves = 4;
   const quiz = advanceGame(initial, { ...zero, score: 101 }, { type: "move", row: 7, col: 7 });
   const answer = advanceGame(quiz.game, quiz.stats, { type: "answer", index: (quiz.game.question!.correctAnswerIndex + 1) % 4 });
@@ -45,8 +45,10 @@ test("wrong answer halves score, freeze cannot be bypassed, next round keeps sta
   assert.throws(() => advanceGame(frozen, zero, { type: "thaw" }, 7999));
   assert.equal(advanceGame(frozen, zero, { type: "thaw" }, 8001).game.stage, "move");
   frozen.stage = "round";
-  const next = advanceGame(frozen, { ...zero, score: 50, wins: 2 }, { type: "next" });
-  assert.equal(next.game.round, 2); assert.equal(next.stats.score, 50); assert.equal(next.stats.wins, 2);
+  const restored = JSON.parse(JSON.stringify(frozen));
+  for (const type of ["next", "move", "answer", "continue", "card", "acknowledge", "thaw"] as const) {
+    assert.throws(() => advanceGame(restored, { ...zero, score: 50 }, { type, row: 7, col: 7, index: 0 }), /lượt chơi duy nhất/);
+  }
 });
 
 test("five-in-a-row in all directions and bot immediate defense", () => {
@@ -69,6 +71,27 @@ test("win bonus paid once, score cap, and requested card comes from server deck"
   assert.equal(win.stats.score, 150); assert.equal(win.stats.wins, 1);
   assert.throws(() => advanceGame(win.game, win.stats, { type: "move", row: 8, col: 4 }));
   const cards = newGame(); cards.stage = "cards"; cards.cards = [{ kind: "double", title: "Nhân đôi", value: 2 }];
-  assert.equal(advanceGame(cards, { ...zero, score: 999999999 }, { type: "card", index: 0 }).stats.score, 1000000000);
+  const reveal = advanceGame(cards, { ...zero, score: 999999999 }, { type: "card", index: 0 });
+  assert.equal(reveal.game.stage, "reveal");
+  assert.equal(reveal.stats.score, 999999999);
+  assert.equal(advanceGame(reveal.game, reveal.stats, { type: "acknowledge" }).stats.score, 1000000000);
   assert.throws(() => advanceGame(cards, zero, { type: "card", index: 2 }));
+});
+
+test("every card stays revealed across refresh until acknowledgement; effects apply once", () => {
+  for (const kind of ["gain", "double", "lose", "steal", "split", "freeze", "gamble"] as const) {
+    const game = newGame(); game.stage = "cards";
+    game.cards = [{ kind, title: `Thẻ ${kind}`, value: kind === "freeze" ? 8 : 50 }];
+    const reveal = advanceGame(game, { ...zero, score: 100 }, { type: "card", index: 0 }, 1000);
+    assert.equal(publicGame(reveal.game).revealedCard?.kind, kind);
+    assert.equal(reveal.stats.score, 100);
+    assert.equal(reveal.game.board.flat().filter(Boolean).length, 0);
+    assert.throws(() => advanceGame(reveal.game, reveal.stats, { type: "move", row: 7, col: 7 }));
+    const restored = JSON.parse(JSON.stringify(reveal.game));
+    const applied = advanceGame(restored, reveal.stats, { type: "acknowledge" }, 60000);
+    assert.equal(applied.game.revealedCard, null);
+    assert.equal(applied.game.stage, kind === "steal" || kind === "split" ? "target" : kind === "freeze" ? "frozen" : "move");
+    if (kind === "freeze") assert.equal(applied.game.frozenUntil, 68000);
+    assert.throws(() => advanceGame(applied.game, applied.stats, { type: "acknowledge" }));
+  }
 });

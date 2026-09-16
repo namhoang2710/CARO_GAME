@@ -4,6 +4,8 @@ import { advanceGame, newGame, publicGame, type GameState } from "@/lib/server/g
 import type { GameAction, Participant, Room, RoomSnapshot } from "@/lib/sessionTypes";
 
 export const runtime = "nodejs";
+// Keep game actions close to the project's Supabase database (Tokyo).
+export const preferredRegion = "hnd1";
 export const dynamic = "force-dynamic";
 type RawSnapshot = { room: Room; players: Participant[]; serverTime: string;
   me: (Participant & { version: number; state: GameState }) | null };
@@ -60,6 +62,14 @@ export async function POST(request: Request) {
       p_effect: result.target?.effect ?? null, p_percent: result.target?.percent ?? 0,
     });
     checkDatabase(error);
-    return respond(view(await snapshot(code, hash)));
+    if (result.target) return respond(view(await snapshot(code, hash)));
+    // A version-checked, self-only commit already has a known result. Avoid
+    // making every click wait for a third round trip to the database.
+    const updated = { ...data.me, ...result.stats, state: result.game,
+      version: data.me.version + 1, last_seen: new Date().toISOString() };
+    const players = data.players.map((player) => player.id === updated.id
+      ? { ...player, ...result.stats, last_seen: updated.last_seen } : player)
+      .sort((a, b) => b.score - a.score || a.joined_at.localeCompare(b.joined_at) || a.id.localeCompare(b.id));
+    return respond(view({ ...data, me: updated, players, serverTime: new Date().toISOString() }));
   } catch (error) { return failure(error); }
 }

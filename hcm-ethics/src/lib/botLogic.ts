@@ -89,28 +89,32 @@ function findBestMoveWithOptions(
     return blockingMove;
   }
 
-  const botFourMove = findBestThreatMove(board, candidates, botSymbol, ATTACK_WEIGHTS, (threat) =>
+  // Compute each candidate's attack/defense once, reused by every tactical pass.
+  // This cache is local to one move; no boards accumulate between games.
+  const attack = new Map(candidates.map((move) => [move, analyzeMoveThreat(board, move.row, move.col, botSymbol, ATTACK_WEIGHTS)]));
+  const defense = new Map(candidates.map((move) => [move, analyzeMoveThreat(board, move.row, move.col, playerSymbol, DEFENSE_WEIGHTS)]));
+  const botFourMove = findBestThreatMove(board, candidates, attack, (threat) =>
     threat.openFours > 0 || threat.fours > 0,
   );
   if (botFourMove) {
     return botFourMove;
   }
 
-  const playerFourMove = findBestThreatMove(board, candidates, playerSymbol, DEFENSE_WEIGHTS, (threat) =>
+  const playerFourMove = findBestThreatMove(board, candidates, defense, (threat) =>
     threat.openFours > 0 || threat.fours > 0,
   );
   if (playerFourMove) {
     return playerFourMove;
   }
 
-  const botOpenThreeMove = findBestThreatMove(board, candidates, botSymbol, ATTACK_WEIGHTS, (threat) =>
+  const botOpenThreeMove = findBestThreatMove(board, candidates, attack, (threat) =>
     threat.openThrees > 0 || threat.threes >= 2,
   );
   if (botOpenThreeMove) {
     return botOpenThreeMove;
   }
 
-  const playerOpenThreeMove = findBestThreatMove(board, candidates, playerSymbol, DEFENSE_WEIGHTS, (threat) =>
+  const playerOpenThreeMove = findBestThreatMove(board, candidates, defense, (threat) =>
     threat.openThrees > 0 || threat.threes >= 2,
   );
   if (playerOpenThreeMove) {
@@ -122,8 +126,8 @@ function findBestMoveWithOptions(
   let bestScore = Number.NEGATIVE_INFINITY;
 
   for (const move of candidates) {
-    const attackThreat = analyzeMoveThreat(board, move.row, move.col, botSymbol, ATTACK_WEIGHTS);
-    const defenseThreat = analyzeMoveThreat(board, move.row, move.col, playerSymbol, DEFENSE_WEIGHTS);
+    const attackThreat = attack.get(move)!;
+    const defenseThreat = defense.get(move)!;
     const attackScore = attackThreat.score;
     const defenseScore = defenseThreat.score * defenseMultiplier;
     const positionalScore = getCenterScore(move.row, move.col) + getNeighborScore(board, move.row, move.col);
@@ -452,15 +456,14 @@ function getForkBonus(threat: ThreatSummary, weights: ScoreWeights): number {
 function findBestThreatMove(
   board: Board,
   candidates: Move[],
-  symbol: Mark,
-  weights: ScoreWeights,
+  threats: Map<Move, ThreatSummary>,
   predicate: (threat: ThreatSummary) => boolean,
 ): Move | null {
   let bestMove: Move | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
 
   for (const move of candidates) {
-    const threat = analyzeMoveThreat(board, move.row, move.col, symbol, weights);
+    const threat = threats.get(move)!;
     if (!predicate(threat)) {
       continue;
     }

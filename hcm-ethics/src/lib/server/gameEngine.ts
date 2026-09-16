@@ -13,14 +13,14 @@ export const MAX_SCORE = 1_000_000_000;
 export function newGame(): GameState {
   return { board: createEmptyBoard(), stage: "move", round: 1, roundMoves: 0, result: null,
     winner: { winner: null, line: [] }, question: null, feedback: null, cards: [],
-    targetCard: null, asked: [], frozenUntil: 0, message: "Bạn đi trước. Nối 5 quân để thắng!" };
+    targetCard: null, revealedCard: null, asked: [], frozenUntil: 0, message: "Bạn đi trước. Mỗi người chỉ chơi một ván trong phiên!" };
 }
 
 export function publicGame(game: GameState): GameView {
   const q = game.question;
   return { board: game.board, stage: game.stage, round: game.round, roundMoves: game.roundMoves,
     result: game.result, winner: game.winner, frozenUntil: game.frozenUntil, message: game.message,
-    feedback: game.feedback, cardCount: game.cards.length, targetCard: game.targetCard,
+    feedback: game.feedback, cardCount: game.cards.length, targetCard: game.targetCard, revealedCard: game.revealedCard ?? null,
     question: q ? { id: q.id, question: q.question, options: q.options, difficulty: q.difficulty } : null };
 }
 
@@ -51,7 +51,7 @@ function finish(game: GameState, stats: GameStats): boolean {
   const bonus = game.result === "win" ? 100 + (game.roundMoves < 15 ? 50 : 0) : game.result === "draw" ? 50 : 20;
   stats.score += bonus;
   stats.wins += Number(game.result === "win");
-  game.message = `+${bonus} điểm thưởng. Điểm tiếp tục cộng dồn trong phiên.`;
+  game.message = `+${bonus} điểm thưởng. Bạn đã hoàn thành lượt chơi duy nhất. Chờ admin kết thúc phiên để chốt bảng xếp hạng.`;
   return true;
 }
 
@@ -66,6 +66,9 @@ function botTurn(game: GameState, stats: GameStats, enhanced = false) {
 }
 
 export function advanceGame(previous: GameState, previousStats: GameStats, action: GameAction, now = Date.now()) {
+  if (previous.stage === "round" || previous.result) {
+    throw new Error("Bạn đã hoàn thành lượt chơi duy nhất trong phiên. Hãy chờ phiên mới.");
+  }
   const game = structuredClone(previous);
   const { score, wins, correct, wrong, moves } = previousStats;
   const stats: GameStats = { score, wins, correct, wrong, moves };
@@ -119,7 +122,14 @@ export function advanceGame(previous: GameState, previousStats: GameStats, actio
     if (!Number.isInteger(action.index) || !game.cards[action.index!]) throw new Error("Thẻ không hợp lệ.");
     const card = game.cards[action.index!];
     game.cards = [];
+    game.revealedCard = card;
+    game.stage = "reveal";
     game.message = card.title;
+  } else if (action.type === "acknowledge") {
+    requireStage("reveal");
+    const card = game.revealedCard;
+    if (!card) throw new Error("Không tìm thấy thẻ đã bốc.");
+    game.revealedCard = null;
     if (card.kind === "steal" || card.kind === "split") {
       game.targetCard = card;
       game.stage = "target";
@@ -147,9 +157,6 @@ export function advanceGame(previous: GameState, previousStats: GameStats, actio
     if (now < game.frozenUntil) throw new Error("Chưa hết thời gian đóng băng.");
     game.frozenUntil = 0;
     botTurn(game, stats);
-  } else if (action.type === "next") {
-    requireStage("round");
-    Object.assign(game, newGame(), { round: game.round + 1, asked: game.asked });
   } else throw new Error("Thao tác không hợp lệ.");
   stats.score = Math.min(MAX_SCORE, Math.max(0, Math.floor(stats.score)));
   return { game, stats, target };

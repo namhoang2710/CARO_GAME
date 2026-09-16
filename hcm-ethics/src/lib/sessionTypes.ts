@@ -14,11 +14,11 @@ export type Card = {
   title: string; value: number;
 };
 export type GameView = {
-  board: Board; stage: "move" | "quiz" | "feedback" | "cards" | "target" | "frozen" | "round";
+  board: Board; stage: "move" | "quiz" | "feedback" | "cards" | "reveal" | "target" | "frozen" | "round";
   round: number; roundMoves: number; result: GameResult | null; winner: WinnerState;
   question: { id: string; question: string; options: string[]; difficulty: string } | null;
   feedback: { correct: boolean; correctIndex: number; explanation: string; selected: number } | null;
-  cardCount: number; targetCard: Card | null; frozenUntil: number; message: string;
+  cardCount: number; targetCard: Card | null; revealedCard?: Card | null; frozenUntil: number; message: string;
 };
 export type RoomSnapshot = {
   room: Room; players: Participant[]; serverTime: string;
@@ -26,6 +26,6 @@ export type RoomSnapshot = {
 };
 export type PlayerCredential = { code: string; token: string; name: string };
 export type GameAction = {
-  type: "move" | "answer" | "continue" | "card" | "target" | "skip" | "thaw" | "next";
+  type: "move" | "answer" | "continue" | "card" | "acknowledge" | "target" | "skip" | "thaw" | "next";
   row?: number; col?: number; index?: number; targetId?: string;
 };
