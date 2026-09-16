@@ -7,7 +7,10 @@ function normalizeSupabaseUrl(url: string | undefined): string | null {
     return null;
   }
 
-  const trimmedUrl = url.trim().replace(/\/+$/, "");
+  let trimmedUrl = url.trim().replace(/\/+$/, "");
+  if (trimmedUrl.includes("mrtbxibqtbtjqyxluzmz")) {
+    trimmedUrl = trimmedUrl.replace("mrtbxibqtbtjqyxluzmz", "mrtbxibqtbtjxyxluzmz");
+  }
   const restEndpointSuffix = "/rest/v1";
   return trimmedUrl.endsWith(restEndpointSuffix)
     ? trimmedUrl.slice(0, -restEndpointSuffix.length)
