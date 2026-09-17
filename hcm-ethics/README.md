@@ -1,5 +1,7 @@
 # Caro Quiz Battle
 
+> **Bản phiên chơi hiện tại:** xem [SCORE-HISTORY.md](SCORE-HISTORY.md) để triển khai lịch sử điểm cá nhân và [SESSION-FIXES.md](SESSION-FIXES.md) cho luật một ván mỗi phiên. Schema hiện dùng là `supabase/01-session-game.sql` rồi `supabase/02-private-score-history.sql`. Hướng dẫn leaderboard toàn cục bên dưới là tài liệu cũ, không dùng để cài bản phiên chơi mới.
+
 Mini game cuối bài thuyết trình: người chơi nhập tên, đánh caro 15x15 với bot, trả lời quiz lấy từ nội dung, chọn thẻ bài điểm số và cập nhật điểm lên leaderboard Supabase realtime.
 
 ## Tech stack

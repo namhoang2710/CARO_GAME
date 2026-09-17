@@ -66,6 +66,7 @@ test("admin + two players: lobby gates, live game, quiz, final scores, new-sessi
   await expect(correct).toHaveAttribute("aria-pressed", "true");
   await expect(player.getByText("Đã chọn đáp án · Đang kiểm tra…")).toBeVisible();
   await expect(player.locator(".quiz-feedback")).toBeVisible();
+  await expect(player.locator(".history-event").filter({ hasText: "Trả lời đúng câu hỏi" })).toHaveCount(1);
   await player.screenshot({ path: "test-results/quiz-mobile.png", fullPage: true });
   await player.getByRole("button", { name: "Tiếp tục →" }).click();
   await expect(player.locator(".quiz-feedback")).toHaveCount(0);
@@ -136,4 +137,67 @@ test("home, unauthenticated admin and direct play have no overflow or bypass", a
   await page.goto("/admin"); await expect(page.getByLabel("Mật khẩu quản trò")).toBeVisible();
   const request = await page.request.post("/api/admin", { data: { action: "start", code: "123456" } });
   expect(request.status()).toBe(401);
+});
+
+test("private score history: two-sided stealing, observers, pagination and reduced motion", async ({ page: host, browser }) => {
+  expect((await host.request.post("/api/admin", { data: { action:"login",password:"test-admin-password" } })).ok()).toBe(true);
+  const created = await host.request.post("/api/admin", { data: { action:"create", title:"Caro Club · Đấu trường lớp học", duration:10,capacity:3,actionId:crypto.randomUUID() } });
+  const code=(await created.json()).room.code;
+  const a=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const b=await browser.newContext({viewport:{width:1440,height:1000}});
+  const c=await browser.newContext();
+  try {
+    const actor=await a.newPage(), victim=await b.newPage(), observer=await c.newPage();
+    await join(actor,code,"Minh Anh"); await join(victim,code,"Tuấn Hưng"); await join(observer,code,"Ngọc Hà");
+    expect((await host.request.post("/api/admin", {data:{action:"start",code}})).ok()).toBe(true);
+    const creds=await Promise.all([actor,victim].map(p=>p.evaluate(()=>JSON.parse(sessionStorage.getItem("caro:session:v1")!))));
+    const positions=[[7,7,"X"],[7,8,"O"],[6,6,"X"],[8,8,"O"],[5,5,"X"]] as const;
+    const board=newGame().board; positions.forEach(([r,c,mark])=>{board[r][c]=mark;});
+    const actorState={...newGame(),board,roundMoves:5,stage:"target",targetCard:{kind:"steal",title:"Cướp 50%",value:50}};
+    for(const [i,credential] of creds.entries()) {
+      const seed=await host.request.post("http://127.0.0.1:54329/rest/v1/rpc/caro_commit",{headers:{apikey:"test-service-key"},data:{
+        p_code:code,p_token_hash:createHash("sha256").update(credential.token).digest("hex"),p_version:0,p_action_id:crypto.randomUUID(),
+        p_state:i===0?actorState:{...newGame(),board},p_stats:{score:i===0?180:320,wins:0,correct:2,wrong:0,moves:5},p_target_id:null,p_effect:null,p_percent:0,
+      }});
+      expect(seed.ok()).toBe(true);
+    }
+    await actor.reload(); await victim.reload(); await observer.reload();
+    await actor.locator(".rank-list li").filter({hasText:"Tuấn Hưng"}).getByRole("button").click();
+    const ownText="Bạn đã cướp 160 điểm từ Tuấn Hưng";
+    const victimText="Minh Anh đã cướp 160 điểm của bạn";
+    await expect(actor.locator(".history-event")).toContainText(ownText);
+    await expect(actor.locator(".history-event .event-delta")).toContainText("+160");
+    await victim.getByRole("button",{name:"Làm mới",exact:true}).click();
+    await expect(victim.locator(".history-event")).toContainText(victimText);
+    await expect(victim.locator(".history-event .event-delta")).toContainText("−160");
+    await expect(victim.locator(".score-number")).toHaveText("160");
+    await observer.getByRole("button",{name:"Làm mới",exact:true}).click();
+    await expect(observer.locator(".history-event")).toHaveCount(0);
+    await expect(observer.locator(".history-empty")).toBeVisible();
+    const publicSnapshot=await (await host.request.get(`/api/rooms?code=${code}`)).json();
+    expect(publicSnapshot.me).toBeNull();
+    expect(publicSnapshot.players.every((p:Record<string,unknown>)=>!("history" in p))).toBe(true);
+    expect((await host.request.get(`/api/rooms?code=${code}&historyBefore=99999`)).status()).toBe(401);
+    await victim.reload(); await expect(victim.locator(".history-event")).toContainText(victimText);
+    await victim.screenshot({path:"test-results/history-desktop.png",fullPage:true});
+    await actor.screenshot({path:"test-results/history-mobile.png",fullPage:true});
+    await victim.setViewportSize({width:360,height:800});
+    expect(await victim.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await victim.emulateMedia({reducedMotion:"reduce"});
+    expect(await victim.locator(".score-number").evaluate(el=>getComputedStyle(el).animationName)).toBe("none");
+    for(let i=0;i<22;i++) {
+      const seeded=await host.request.post("http://127.0.0.1:54329/rest/v1/rpc/caro_commit_v2",{headers:{apikey:"test-service-key"},data:{
+        p_code:code,p_token_hash:createHash("sha256").update(creds[1].token).digest("hex"),p_version:2+i,p_action_id:crypto.randomUUID(),
+        p_state:newGame(),p_stats:{score:161+i,wins:0,correct:2,wrong:0,moves:5},p_target_id:null,p_effect:null,p_percent:0,
+      }});
+      expect(seeded.ok()).toBe(true);
+    }
+    await victim.getByRole("button",{name:"Làm mới",exact:true}).click();
+    await expect(victim.locator(".history-event")).toHaveCount(20);
+    await victim.getByRole("button",{name:"Xem 20 sự kiện cũ hơn ↓"}).click();
+    await expect(victim.locator(".history-event")).toHaveCount(3);
+    await expect(victim.locator(".score-history")).toContainText(victimText);
+    await victim.getByRole("button",{name:"Về mới nhất"}).click();
+    await expect(victim.locator(".history-event")).toHaveCount(20);
+  } finally { await a.close(); await b.close(); await c.close(); }
 });

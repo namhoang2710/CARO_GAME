@@ -22,8 +22,14 @@ export type GameView = {
 };
 export type RoomSnapshot = {
   room: Room; players: Participant[]; serverTime: string;
-  me: (Participant & { version: number; game: GameView }) | null;
+  me: (Participant & { version: number; game: GameView; history: ScoreHistoryPage | null }) | null;
 };
+export type ScoreEvent = {
+  id: string; kind: "score" | "quiz" | "card" | "round" | "steal" | "stolen" | "split" | "split_received";
+  label: string; delta: number; balance: number; counterpart_name: string | null;
+  amount: number | null; created_at: string;
+};
+export type ScoreHistoryPage = { events: ScoreEvent[]; nextCursor: string | null; total: number };
 export type PlayerCredential = { code: string; token: string; name: string };
 export type GameAction = {
   type: "move" | "answer" | "continue" | "card" | "acknowledge" | "target" | "skip" | "thaw" | "next";

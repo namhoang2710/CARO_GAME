@@ -7,6 +7,7 @@ import { api } from "@/lib/roomClient";
 import type { Participant, PlayerCredential } from "@/lib/sessionTypes";
 import Leaderboard from "./Leaderboard";
 import RoomGame from "./RoomGame";
+import ScoreHistory from "./ScoreHistory";
 import RoomClock from "./RoomClock";
 import QRCodeJoin from "./QRCodeJoin";
 
@@ -69,6 +70,7 @@ export default function RoomScreen({ code, mode = "player" }: { code: string; mo
           <><div className="host-live-heading"><div><p className="eyebrow">{room.title}</p><h1>Cuộc đua đang diễn ra.</h1><p className="muted">{players.length} người chơi · {online} đang kết nối</p></div><RoomClock endsAt={room.ends_at} serverTime={snapshot.serverTime} onExpire={refresh} /></div>
           {mode === "player" && <p className="notice">Bạn chưa tham gia phiên này hoặc đã bị đưa ra khỏi phòng. Bạn có thể xem bảng xếp hạng và chờ phiên tiếp theo.</p>}
           <Leaderboard players={players} /><div className="actions">{host && <button className="button danger" disabled={busy} onClick={() => { void control("end"); }}>Kết thúc & chốt điểm</button>}<button className="button" onClick={() => downloadResults(code, players)}>Tải bảng điểm</button></div></>}
+    {finished && me && credential && <div className="final-personal-history"><ScoreHistory key={me.id} history={me.history} credential={credential} /></div>}
     {host && <p className="quiet"><Link target="_blank" href={`/presenter?room=${code}`} className="text-link">Mở màn hình trình chiếu ↗</Link></p>}
   </main>;
 }

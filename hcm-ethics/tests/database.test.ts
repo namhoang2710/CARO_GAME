@@ -13,6 +13,9 @@ before(async () => {
   await db.exec("create role anon; create role authenticated; create role service_role bypassrls;");
   await db.exec(sql);
   await db.exec(sql); // Migration must be safe to re-run.
+  const history = readFileSync(new URL("../supabase/02-private-score-history.sql", import.meta.url), "utf8");
+  await db.exec(history);
+  await db.exec(history);
 });
 after(async () => { await db.close(); });
 async function create(code: string, capacity = 2) {

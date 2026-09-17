@@ -1,14 +1,14 @@
 import { playerToken, limitRequest, tokenHash } from "@/lib/server/auth";
 import { ApiError, checkDatabase, database, failure, readBody, respond, roomCode, uuid } from "@/lib/server/database";
 import { advanceGame, newGame, publicGame, type GameState } from "@/lib/server/gameEngine";
-import type { GameAction, Participant, Room, RoomSnapshot } from "@/lib/sessionTypes";
+import type { GameAction, Participant, Room, RoomSnapshot, ScoreHistoryPage } from "@/lib/sessionTypes";
 
 export const runtime = "nodejs";
 // Keep game actions close to the project's Supabase database (Tokyo).
 export const preferredRegion = "hnd1";
 export const dynamic = "force-dynamic";
 type RawSnapshot = { room: Room; players: Participant[]; serverTime: string;
-  me: (Participant & { version: number; state: GameState }) | null };
+  me: (Participant & { version: number; state: GameState; history?: ScoreHistoryPage }) | null };
 
 async function snapshot(code: string, hash: string): Promise<RawSnapshot> {
   const { data, error } = await database().rpc("caro_snapshot", { p_code: code, p_token_hash: hash });
@@ -19,13 +19,22 @@ function view(data: RawSnapshot): RoomSnapshot {
   const me = data.me;
   return { ...data, me: me ? { id: me.id, name: me.name, score: me.score, wins: me.wins, correct: me.correct,
     wrong: me.wrong, moves: me.moves, joined_at: me.joined_at, last_seen: me.last_seen, version: me.version,
-    game: publicGame(data.room.status === "finished" ? newGame() : me.state) } : null };
+    game: publicGame(data.room.status === "finished" ? newGame() : me.state), history: me.history ?? null } : null };
 }
 
 export async function GET(request: Request) {
   try {
-    const code = roomCode(new URL(request.url).searchParams.get("code"));
+    const params = new URL(request.url).searchParams;
+    const code = roomCode(params.get("code"));
     const hash = request.headers.has("authorization") ? playerToken(request) : "";
+    if (params.has("historyBefore")) {
+      if (!hash) throw new ApiError("Bạn cần tham gia phòng để xem lịch sử cá nhân.", 401);
+      const before = params.get("historyBefore")!;
+      if (!/^[1-9][0-9]{0,17}$/.test(before)) throw new ApiError("Mốc lịch sử không hợp lệ.");
+      const { data, error } = await database().rpc("caro_history", { p_code: code, p_token_hash: hash, p_before: before });
+      checkDatabase(error);
+      return respond(data);
+    }
     return respond(view(await snapshot(code, hash)));
   } catch (error) { return failure(error); }
 }
@@ -56,20 +65,13 @@ export async function POST(request: Request) {
     let result: ReturnType<typeof advanceGame>;
     try { result = advanceGame(data.me.state, data.me, action); }
     catch (error) { throw new ApiError(error instanceof Error ? error.message : "Thao tác không hợp lệ."); }
-    const { error } = await database().rpc("caro_commit", {
+    const { data: committed, error } = await database().rpc("caro_commit_v2", {
       p_code: code, p_token_hash: hash, p_version: body.version, p_action_id: actionId,
       p_state: result.game, p_stats: result.stats, p_target_id: result.target?.id ?? null,
       p_effect: result.target?.effect ?? null, p_percent: result.target?.percent ?? 0,
     });
+    if (error?.code === "PGRST202") throw new ApiError("Admin cần chạy supabase/02-private-score-history.sql trước khi dùng bản mới.", 503);
     checkDatabase(error);
-    if (result.target) return respond(view(await snapshot(code, hash)));
-    // A version-checked, self-only commit already has a known result. Avoid
-    // making every click wait for a third round trip to the database.
-    const updated = { ...data.me, ...result.stats, state: result.game,
-      version: data.me.version + 1, last_seen: new Date().toISOString() };
-    const players = data.players.map((player) => player.id === updated.id
-      ? { ...player, ...result.stats, last_seen: updated.last_seen } : player)
-      .sort((a, b) => b.score - a.score || a.joined_at.localeCompare(b.joined_at) || a.id.localeCompare(b.id));
-    return respond(view({ ...data, me: updated, players, serverTime: new Date().toISOString() }));
+    return respond(view(committed as RawSnapshot));
   } catch (error) { return failure(error); }
 }

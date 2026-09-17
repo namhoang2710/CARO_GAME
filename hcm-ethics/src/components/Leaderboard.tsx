@@ -13,7 +13,7 @@ export default memo(function Leaderboard({ players, currentId, finished = false,
         <span className="rank-number">{String(index + 1).padStart(2, "0")}</span>
         <div className="rank-person"><strong>{player.name}{player.id === currentId && <small> Bạn</small>}</strong><span>{player.wins} ván thắng · {player.correct} câu đúng</span></div>
         {onTarget ? <button className="button small" disabled={busy || player.id === currentId} onClick={() => onTarget(player.id)}>{player.score.toLocaleString("vi-VN")} đ</button> :
-          <strong className="rank-score">{player.score.toLocaleString("vi-VN")}<small>điểm</small></strong>}
+          <strong className="rank-score"><span key={player.score} className="rank-score-number">{player.score.toLocaleString("vi-VN")}</span><small>điểm</small></strong>}
       </li>)}</ol>}
   </section>;
 });

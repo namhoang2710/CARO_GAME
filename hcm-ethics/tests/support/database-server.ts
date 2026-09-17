@@ -7,11 +7,14 @@ const db = new PGlite();
 async function initialize() {
   await db.exec("create role anon; create role authenticated; create role service_role bypassrls;");
   await db.exec(readFileSync(new URL("../../supabase/01-session-game.sql", import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../../supabase/02-private-score-history.sql", import.meta.url), "utf8"));
 }
 const functions: Record<string, string[]> = {
   caro_rate_limit: ["p_key", "p_limit", "p_seconds"], caro_join: ["p_code", "p_name", "p_token_hash", "p_state"],
   caro_snapshot: ["p_code", "p_token_hash"], caro_room_control: ["p_code", "p_action", "p_player_id"],
   caro_commit: ["p_code", "p_token_hash", "p_version", "p_action_id", "p_state", "p_stats", "p_target_id", "p_effect", "p_percent"],
+  caro_commit_v2: ["p_code", "p_token_hash", "p_version", "p_action_id", "p_state", "p_stats", "p_target_id", "p_effect", "p_percent"],
+  caro_history: ["p_code", "p_token_hash", "p_before"],
 };
 const server = createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json");
