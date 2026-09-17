@@ -38,7 +38,7 @@ export default function JoinRoom() {
       <section className="join-intro"><p className="eyebrow">MLN131 · CHƠI CÙNG LỚP</p>
         <h1>Một nước cờ.<br />Một lần <span>bứt phá.</span></h1>
         <p className="intro-copy">Đấu Caro với bot, chinh phục quiz và lật thẻ bất ngờ. Cùng bắt đầu, cùng đua lên bảng xếp hạng.</p>
-        <div className="game-facts"><span>15 × 15 <small>Bàn cờ</small></span><span>42 <small>Câu hỏi</small></span><span>01 <small>Nhà vô địch</small></span></div>
+        <div className="game-facts"><span>15 × 15 <small>Bàn cờ</small></span><span>45 <small>Câu hỏi</small></span><span>01 <small>Nhà vô địch</small></span></div>
         <p className="quiet">Nhận mã từ quản trò. Vào phòng. Chờ hiệu lệnh.</p>
       </section>
       <section className="join-panel panel"><div className="mini-marks" aria-hidden="true"><span>×</span><span>○</span></div>
@@ -53,6 +53,6 @@ export default function JoinRoom() {
         <p className="panel-note">Game chỉ bắt đầu khi quản trò mở phiên.</p>
       </section>
     </div>
-    <footer className="site-footer"><span>Caro Quiz Battle</span><span>Tư tưởng đạo đức Hồ Chí Minh</span></footer>
+    <footer className="site-footer"><span>Caro Quiz Battle</span><span>MLN131 · Sứ mệnh lịch sử của giai cấp công nhân</span></footer>
   </main>;
 }
