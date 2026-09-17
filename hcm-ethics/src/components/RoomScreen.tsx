@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRoom } from "@/hooks/useRoom";
-import { readCredential } from "@/lib/sessionStorage";
+import { readCredential, clearGameSession } from "@/lib/sessionStorage";
 import { api } from "@/lib/roomClient";
 import type { Participant, PlayerCredential } from "@/lib/sessionTypes";
 import Leaderboard from "./Leaderboard";
@@ -65,7 +65,7 @@ export default function RoomScreen({ code, mode = "player" }: { code: string; mo
     <section className="roster-section"><div className="section-heading"><h2>Đã vào phòng <span className="muted">({players.length})</span></h2><span className="quiet">{online} đang kết nối</span></div>
       {players.length ? <ul className="roster">{[...players].sort((a,b) => a.joined_at.localeCompare(b.joined_at)).map((p) => <li key={p.id}><span className="avatar">{p.name.charAt(0).toUpperCase()}</span><strong>{p.name}</strong>{p.id === me?.id && <small>Bạn</small>}{host && <button className="text-link" disabled={busy} aria-label={`Đưa ${p.name} ra khỏi phòng`} onClick={() => { void control("remove", p.id); }}>×</button>}</li>)}</ul> : <div className="empty-state dashed"><strong>Ghế đầu tiên đang chờ.</strong><p>Đưa mã phòng lên màn hình để mọi người tham gia.</p></div>}
     </section>{host && <button className="text-link danger-text" disabled={busy} onClick={() => { void control("end"); }}>Đóng phòng chờ</button>}</> :
-      finished ? <><section className="results-heading"><p className="eyebrow">PHIÊN {code} · HOÀN THÀNH</p><h1>Cuộc đua đã khép lại.</h1><p className="intro-copy">{players[0] ? `Chúc mừng ${players[0].name} dẫn đầu với ${players[0].score.toLocaleString("vi-VN")} điểm!` : "Phiên đã đóng. Hẹn gặp bạn ở phòng tiếp theo."}</p><div className="actions"><Link className="button primary" href={host ? "/admin" : "/"}>{host ? "Tạo phiên tiếp theo →" : "Tham gia phiên khác →"}</Link><button className="button" onClick={() => downloadResults(code, players)}>Tải kết quả CSV</button></div></section><Leaderboard players={players} currentId={me?.id} finished /></> :
+      finished ? <><section className="results-heading"><p className="eyebrow">PHIÊN {code} · HOÀN THÀNH</p><h1>Cuộc đua đã khép lại.</h1><p className="intro-copy">{players[0] ? `Chúc mừng ${players[0].name} dẫn đầu với ${players[0].score.toLocaleString("vi-VN")} điểm!` : "Phiên đã đóng. Hẹn gặp bạn ở phòng tiếp theo."}</p><div className="actions"><Link className="button primary" href={host ? "/admin" : "/"} onClick={() => { if (!host) clearGameSession(); }}>{host ? "Tạo phiên tiếp theo →" : "Chơi lại"}</Link></div></section><Leaderboard players={players} currentId={me?.id} finished /></> :
         mode === "player" && me && credential ? <RoomGame key={room.id} snapshot={snapshot} credential={credential} accept={accept} refresh={refresh} connectionError={error} /> :
           <><div className="host-live-heading"><div><p className="eyebrow">{room.title}</p><h1>Cuộc đua đang diễn ra.</h1><p className="muted">{players.length} người chơi · {online} đang kết nối</p></div><RoomClock endsAt={room.ends_at} serverTime={snapshot.serverTime} onExpire={refresh} /></div>
           {mode === "player" && <p className="notice">Bạn chưa tham gia phiên này hoặc đã bị đưa ra khỏi phòng. Bạn có thể xem bảng xếp hạng và chờ phiên tiếp theo.</p>}

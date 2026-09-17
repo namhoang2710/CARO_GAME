@@ -36,7 +36,8 @@ p { line-height: 1.65; }
 .site-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; min-height: 92px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 1.65rem; letter-spacing: -.075em; font-weight: 800; white-space: nowrap; }
 .brand span { color: var(--accent); }
-.join-page, .admin-page, .room-page { width: min(1280px, calc(100% - 64px)); margin: 0 auto; }
+.join-page, .admin-page { width: min(1280px, calc(100% - 64px)); margin: 0 auto; }
+.room-page { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
 .join-page { display: flex; flex-direction: column; min-height: 100dvh; }
 .join-layout { flex: 1; display: grid; grid-template-columns: 1.3fr 1fr; gap: clamp(2rem, 6vw, 7rem); align-items: center; padding: 4rem 0; }
 .join-intro h1 { font-size: clamp(3.2rem, 5.6vw, 5.4rem); margin-bottom: 1.75rem; }
@@ -106,7 +107,8 @@ input::placeholder { color: #829283; opacity: 1; }
 .room-list a > div { flex: 1; min-width: 0; }
 .room-list strong { display: block; overflow-wrap: anywhere; }
 .room-list small { display: block; color: var(--muted); margin-top: .4rem; }
-.play-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 1.25rem; padding-bottom: 2rem; align-items: start; }
+.play-layout { display: grid; grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(280px, 320px); gap: 1.25rem; padding-bottom: 2rem; align-items: start; }
+.play-col-left, .play-col-right { display: grid; gap: 1rem; min-width: 0; }
 .board-panel { padding: 1.25rem; min-width: 0; }
 .board-topline { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .board-topline h1 { font-size: 1.65rem; margin-bottom: 0; letter-spacing: -.035em; }
@@ -142,8 +144,11 @@ input::placeholder { color: #829283; opacity: 1; }
 .clock-urgent { color: #ffc19f; }
 .leaderboard { padding: 1.25rem; min-width: 0; }
 .leaderboard h2 { font-size: 1.25rem; }
-.rank-list { margin: 0; padding: 0; list-style: none; max-height: 60dvh; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.rank-list li { display: flex; align-items: center; gap: .85rem; padding: 1rem .4rem; border-bottom: 1px solid var(--line); }
+.rank-list { margin: 0; padding: 0; list-style: none; max-height: 485px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #3e5241 transparent; }
+.rank-list::-webkit-scrollbar { width: 5px; }
+.rank-list::-webkit-scrollbar-thumb { background: #3e5241; border-radius: 4px; }
+.rank-list::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+.rank-list li { display: flex; align-items: center; gap: .85rem; padding: .75rem .4rem; border-bottom: 1px solid var(--line); }
 .rank-list li:last-child { border-bottom: 0; }
 .rank-number { font-size: .84rem; color: #91a18b; width: 1.3rem; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .rank-person { flex: 1; min-width: 0; }
@@ -236,8 +241,11 @@ input::placeholder { color: #829283; opacity: 1; }
 .history-seal { color: var(--accent); border: 1px solid #d2f57425; background: #d2f57408; padding: .5rem; border-radius: 10px; letter-spacing: -.12em; font-size: 1.1rem; }
 .history-toolbar { display: flex; justify-content: space-between; align-items: center; gap: .4rem; color: var(--muted); font-size: .66rem; padding-bottom: .7rem; border-bottom: 1px solid var(--line); }
 .history-toolbar .text-link { font-size: .67rem; }
-.history-list { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.history-event { display: flex; align-items: flex-start; gap: .65rem; padding: 1rem 0; border-bottom: 1px solid #35423999; animation: event-in 260ms var(--ease-out) both; }
+.history-list { list-style: none; margin: 0; padding: 0; max-height: 485px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #3e5241 transparent; }
+.history-list::-webkit-scrollbar { width: 5px; }
+.history-list::-webkit-scrollbar-thumb { background: #3e5241; border-radius: 4px; }
+.history-list::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+.history-event { display: flex; align-items: flex-start; gap: .65rem; padding: .85rem 0; border-bottom: 1px solid #35423999; animation: event-in 260ms var(--ease-out) both; }
 .history-event:last-child { border-bottom: none; }
 .event-symbol { display: grid; place-items: center; flex: 0 0 27px; height: 27px; border: 1px solid #d2f57428; border-radius: 8px; color: var(--accent); background: #d2f5740a; font-size: 1rem; }
 .event-content { flex: 1; min-width: 0; }
@@ -271,12 +279,17 @@ input::placeholder { color: #829283; opacity: 1; }
 @keyframes winning-in { from { opacity: .65; } to { opacity: 1; } }
 @keyframes piece-in { 0% { opacity: .3; transform: scale(.65); } 70% { opacity: 1; transform: scale(1.1); } 100% { transform: scale(1); } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 1140px) {
+  .play-layout { grid-template-columns: minmax(230px, 270px) minmax(0, 1fr) minmax(250px, 290px); gap: .85rem; }
+}
 @media (max-width: 960px) {
   .join-page, .admin-page, .room-page { width: calc(100% - 40px); }
   .join-layout { gap: 2rem; }
   .join-panel { padding: 1.5rem; }
-  .play-layout { grid-template-columns: minmax(0, 1fr) 290px; gap: .8rem; }
-  .board-panel { padding: .8rem; }
+  .play-layout { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+  .board-panel { order: 1; padding: .8rem; }
+  .play-col-right { order: 2; }
+  .play-col-left { order: 3; }
   .board-topline h1 { font-size: 1.3rem; }
   .player-stats { gap: 1rem; }
   .admin-layout { gap: 1.5rem; }
@@ -316,9 +329,10 @@ input::placeholder { color: #829283; opacity: 1; }
   .room-list strong { font-size: .85rem; }
   .room-list a { gap: .5rem; }
   .play-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: .8rem; }
-  .play-sidebar { display: contents; }
-  .play-sidebar .session-timer { grid-row: 1; }
-  .board-panel, .play-sidebar { width: 100%; }
+  .board-panel { order: 1; }
+  .play-col-right { order: 2; }
+  .play-col-left { order: 3; }
+  .board-panel, .play-col-left, .play-col-right { width: 100%; }
   .board-panel { padding: .65rem; border-radius: 12px; }
   .board-wrap { max-width: 100%; }
   .board-topline h1 { font-size: 1.2rem; }
